@@ -1,7 +1,6 @@
+ <div align="center">
 
-<div align="center">
-
-<img src="https://upload.wikimedia.org/wikipedia/commons/e/ef/Youtube_logo.png" alt="YouTube Logo" width="160">
+<img src="https://upload.wikimedia.org/wikipedia/commons/e/ef/Youtube_logo.png" alt="YouTube Logo" width="55" align="center" />
 
 # YouTube Thumbnail Downloader
 
@@ -10,6 +9,16 @@ A lightweight, browser-based application for extracting, previewing, and downloa
 </div>
 
 ---
+
+## Preview
+
+<div align="center">
+  <img
+    src="https://i.postimg.cc/QdCvtk0G/Screenshot-2026-11-12-012643.png"
+    alt="YouTube Thumbnail Downloader Preview"
+    width="100%"
+  />
+</div>
 
 ## Overview
 
