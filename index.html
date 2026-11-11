@@ -105,7 +105,7 @@
                         type="submit" 
                         class="btn-pink font-extrabold text-sm sm:text-base px-7 sm:px-9 py-3 sm:py-3.5 rounded-full flex-shrink-0 cursor-pointer"
                     >
-                        Download
+                        Search
                     </button>
                 </div>
             </form>
@@ -114,6 +114,12 @@
         <!-- Notification / Error Box -->
         <div id="errorMsg" class="hidden mt-6 px-4 py-3 rounded-lg bg-red-950/60 border border-red-500/30 text-red-300 text-sm animate-fade-in max-w-lg w-full">
             Please enter a valid YouTube URL (e.g. https://www.youtube.com/watch?v=dQw4w9WgXcQ)
+        </div>
+
+        <!-- Notification / Toast for Download status -->
+        <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-zinc-900 border border-zinc-700 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-medium">
+            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>
+            <span id="toastText">Download started successfully!</span>
         </div>
 
         <!-- Thumbnail Results Container -->
@@ -131,18 +137,80 @@
         YouTube Thumbnail Downloader &copy; 2026. All rights reserved.
     </footer>
 
-    <!-- Client Script for Parsing YouTube ID & Displaying Thumbnails -->
+    <!-- Client Script for Parsing YouTube ID & Reliable Blob Downloader -->
     <script>
         const form = document.getElementById('urlForm');
         const input = document.getElementById('youtubeUrl');
         const errorMsg = document.getElementById('errorMsg');
         const resultsContainer = document.getElementById('resultsContainer');
         const thumbnailGrid = document.getElementById('thumbnailGrid');
+        const toast = document.getElementById('toast');
+        const toastText = document.getElementById('toastText');
+
+        function showToast(message, isError = false) {
+            toastText.textContent = message;
+            toast.classList.remove('border-zinc-700', 'border-red-500/50');
+            toast.classList.add(isError ? 'border-red-500/50' : 'border-zinc-700');
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3500);
+        }
 
         function extractVideoId(url) {
             const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
             const match = url.match(regExp);
             return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        // Reliable download handler using fetch & blob
+        async function downloadThumbnail(imageUrl, filename, btnElement) {
+            const originalText = btnElement.innerHTML;
+            btnElement.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-black inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Downloading...
+            `;
+            btnElement.disabled = true;
+
+            try {
+                // Fetch the image as a blob
+                const response = await fetch(imageUrl);
+                if (!response.ok) throw new Error('Network response was not ok');
+                
+                const blob = await response.blob();
+                const blobUrl = window.URL.createObjectURL(blob);
+                
+                // Create temporary anchor tag to trigger download
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                
+                // Clean up
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
+                
+                showToast(`Downloaded ${filename} successfully!`);
+            } catch (err) {
+                console.error('Download failed:', err);
+                // Fallback direct download link if CORS blocks fetch
+                const fallbackLink = document.createElement('a');
+                fallbackLink.href = imageUrl;
+                fallbackLink.target = '_blank';
+                fallbackLink.download = filename;
+                document.body.appendChild(fallbackLink);
+                fallbackLink.click();
+                document.body.removeChild(fallbackLink);
+                
+                showToast(`Opened ${filename} in new tab.`, false);
+            } finally {
+                btnElement.innerHTML = originalText;
+                btnElement.disabled = false;
+            }
         }
 
         form.addEventListener('submit', (e) => {
@@ -161,15 +229,16 @@
             // Define thumbnail qualities
             const qualities = [
                 { name: 'Max Resolution', res: 'maxresdefault', desc: '1280 x 720 (Best Quality)' },
+                { name: 'Standard Definition', res: 'sddefault', desc: '640 x 480 (SD)' },
                 { name: 'High Quality', res: 'hqdefault', desc: '480 x 360 (Standard)' },
-                { name: 'Medium Quality', res: 'mqdefault', desc: '320 x 180 (Medium)' },
-                { name: 'Standard Definition', res: 'sddefault', desc: '640 x 480 (SD)' }
+                { name: 'Medium Quality', res: 'mqdefault', desc: '320 x 180 (Medium)' }
             ];
 
             thumbnailGrid.innerHTML = '';
 
             qualities.forEach(q => {
                 const imgUrl = `https://img.youtube.com/vi/${videoId}/${q.res}.jpg`;
+                const filename = `youtube-thumbnail-${videoId}-${q.res}.jpg`;
                 
                 const card = document.createElement('div');
                 card.className = 'bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between transition hover:border-zinc-700';
@@ -177,7 +246,7 @@
                 card.innerHTML = `
                     <div>
                         <div class="relative rounded-xl overflow-hidden mb-3 bg-zinc-950 aspect-video flex items-center justify-center">
-                            <img src="${imgUrl}" alt="${q.name}" class="object-cover w-full h-full" onerror="this.parentElement.parentElement.parentElement.style.display='none'">
+                            <img src="${imgUrl}" alt="${q.name}" class="object-cover w-full h-full" onerror="this.closest('.bg-zinc-900').style.display='none'">
                         </div>
                         <div class="flex justify-between items-center mb-1">
                             <h4 class="font-bold text-white text-sm sm:text-base">${q.name}</h4>
@@ -185,10 +254,17 @@
                         </div>
                         <p class="text-xs text-zinc-400 mb-4">${q.desc}</p>
                     </div>
-                    <a href="${imgUrl}" target="_blank" download="youtube-thumbnail-${q.res}.jpg" class="w-full py-2.5 px-4 bg-white text-black font-semibold text-center rounded-xl hover:bg-zinc-200 transition text-sm">
+                    <button type="button" class="download-btn w-full py-2.5 px-4 bg-white text-black font-semibold text-center rounded-xl hover:bg-zinc-200 transition text-sm flex items-center justify-center cursor-pointer">
                         Download Image
-                    </a>
+                    </button>
                 `;
+
+                // Attach download event listener
+                const downloadBtn = card.querySelector('.download-btn');
+                downloadBtn.addEventListener('click', () => {
+                    downloadThumbnail(imgUrl, filename, downloadBtn);
+                });
+
                 thumbnailGrid.appendChild(card);
             });
 
